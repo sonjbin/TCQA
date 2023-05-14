@@ -1,0 +1,9 @@
+# @package _group_
+
+name: hard
+train_file: dataset/train.hard.json
+dev_file: dataset/dev.hard.json
+test_file: dataset/test.hard.json
+train_synth_file: dataset/synth_train/train.synthQA.json
+train_tct: dataset/synth_train/train.synthQA.json
+train_crl: dataset/synth_train/train.synthCRL.json

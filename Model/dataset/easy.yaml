@@ -1,0 +1,7 @@
+# @package _group_
+
+name: easy
+train_file: dataset/train.easy.json.gzip
+dev_file: dataset/dev.easy.json
+test_file: dataset/test.easy.json
+train_synth_file: dataset/synth_train/train.synthQA_easy.json
