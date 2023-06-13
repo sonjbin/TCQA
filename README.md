@@ -7,11 +7,14 @@ Time is one of the crucial factors in real-world question answering (QA) problem
 
 ## TCSE task
 <p align="center">
-<img src="./images/TCSE.png" width="70%" height="42.35%" title="TCSE"/>
+<img src="./images/TCSE.PNG" width="70%" height="42.35%" title="TCSE"/>
 </p>
 
 ##Repo Structure
-- 
+- dataset/: this folder contains question-context template for generating TCSE data
+- Model/: all the running code for model training and evalutation
+- generate_TCSE.py: code for generating TCSE dataset with question-context template
+- TC_score.py: code for calculate TC-score from output file
 
 ## Requirements
 - Python 3.8.2
@@ -37,25 +40,25 @@ python generate_TCSE.py --loadtc True --loadq True --data train
 ### Train on TimeQA with TCQA
 BigBird
 ```bash
-python -m BigBird.main model_id=nq dataset=hard cuda=0 mode=train TCSE=True k=1.0 CRL=True k_crl=0.5
+python -m Model.main model_id=nq dataset=hard cuda=0 mode=train TCSE=True k=1.0 CRL=True k_crl=0.5
 ```
 BERT, RoBERTa, ALBERT
 ```bash
-python -m BigBird.main model_id=[bertbase or robertabase or albertbase] dataset=hard mode=eval use_bert=True max_sequence_length=512 doc_stride=256 TCSE=True k=1.0 CRL=True k_crl=1.0
+python -m Model.main model_id=[bertbase or robertabase or albertbase] dataset=hard mode=eval use_bert=True max_sequence_length=512 doc_stride=256 TCSE=True k=1.0 CRL=True k_crl=1.0
 ```
 ### Test
 BigBird
 ```bash
-python -m BigBird.main model_id=nq dataset=hard cuda=0 mode=eval model_path=[YOUR_MODEL]
+python -m Model.main model_id=nq dataset=hard cuda=0 mode=eval model_path=[YOUR_MODEL]
 ```
 BERT, RoBERTa, ALBERT
 ```bash
-python -m BigBird.main model_id=[bertbase or robertabase or albertbase] dataset=hard mode=eval use_bert=True max_sequence_length=512 doc_stride=256 model_path=[YOUR_MODEL]
+python -m Model.main model_id=[bertbase or robertabase or albertbase] dataset=hard mode=eval use_bert=True max_sequence_length=512 doc_stride=256 model_path=[YOUR_MODEL]
 ```
 ### TC-score
 1. Get output file by removing null classifier
 ```bash
-python -m BigBird.main model_id=nq dataset=hard cuda=0 mode=eval model_path=[YOUR_MODEL] --TCAS True
+python -m Model.main model_id=nq dataset=hard cuda=0 mode=eval model_path=[YOUR_MODEL] --TCAS True
 ```
 2. Calculate TC-score
 ```bash
