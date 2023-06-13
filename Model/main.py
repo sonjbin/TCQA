@@ -4,7 +4,7 @@ sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 import torch
 import pandas as pd
-from transformers import BigBirdTokenizer, BigBirdForQuestionAnswering, BigBirdConfig, BigBirdModel, BertForQuestionAnswering, BertTokenizer, BertConfig
+from transformers import *
 from utils import get_raw_scores
 import hydra
 from omegaconf import DictConfig
@@ -17,7 +17,6 @@ import logging
 from transformers.data.processors.utils import DataProcessor
 from multiprocessing import Pool, cpu_count
 import numpy as np
-# from datetime import datetime
 from torch.utils.data import TensorDataset
 from torch import nn
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
@@ -79,12 +78,15 @@ class TSQAExample(object):
         prev_is_whitespace = True
 
         # Split on whitespace so that different tokens may be attributed to their original position.
+        
         for c in self.context_text:
             if _is_whitespace(c):
                 prev_is_whitespace = True
             else:
                 if prev_is_whitespace:
                     doc_tokens.append(c)
+                    #For RoBERTa
+                    # doc_tokens.append(' '+c)
                 else:
                     doc_tokens[-1] += c
                 prev_is_whitespace = False
@@ -188,6 +190,7 @@ def convert_example_to_features_init(tokenizer_for_convert):
 
 def _improve_answer_span(doc_tokens, input_start, input_end, tokenizer, orig_answer_text):
     """Returns tokenized answer spans that better match the annotated answer."""
+    #To perform RoBERTa, change " " to ""
     tok_answer_text = " ".join(tokenizer.tokenize(orig_answer_text))
 
     for new_start in range(input_start, input_end + 1):
@@ -288,6 +291,7 @@ def convert_example_to_features(example, max_seq_length, doc_stride, max_query_l
         end_position = example.end_position
 
         # If the answer cannot be found in the text, then skip this example.
+        #To perform RoBERTa, change " " to ""
         actual_text = " ".join(example.doc_tokens[start_position : (end_position + 1)])
         if actual_text.find(example.answer_text) == -1:
             print(example.doc_tokens)
@@ -449,8 +453,6 @@ class BigBirdForQuestionAnsweringWithNull(PreTrainedModel):
 
         self.null_classifier = BigBirdNullHead(self.bertqa.config)
 
-        self.tctclassifier = BigBirdForQuestionAnswering.from_pretrained(model_id,
-            config=self.config, add_pooling_layer=True).qa_classifier
 
 
     def forward(self, **kwargs):
@@ -492,8 +494,8 @@ class BigBirdForQuestionAnsweringWithNull(PreTrainedModel):
 class BertForQuestionAnsweringWithNull(PreTrainedModel):
     def __init__(self, config, model_id):
         super().__init__(config)
-        self.bertqa = BertForQuestionAnswering.from_pretrained(model_id,
-            config=self.config)
+        self.bertqa = AutoModelForQuestionAnswering.from_pretrained(model_id,
+                config=self.config)
         self.null_classifier = BigBirdNullHead(self.bertqa.config)
         self.fc = nn.Linear(768, 100)
 
@@ -532,35 +534,6 @@ class BertForQuestionAnsweringWithNull(PreTrainedModel):
         return output_c, output_q #[Batch size, 2, vector dim]
         
         # torch.mean(outputs1[0],dim=1)
-
-
-#For Target Context-Time(TCT) Prediction task
-class BigBirdForTCTClassifier(nn.Module):
-    def __init__(self, model_id, config ):
-        super(BigBirdForTCTClassifier, self).__init__()
-        self.model = BigBirdModel.from_pretrained(model_id, config=config)
-        self.tokenizer = BigBirdTokenizer.from_pretrained(model_id)
-        
-        self.dropout = nn.Dropout(p=0.2)
-        self.fc1 = nn.Linear(768, 100)
-        self.fc2 = nn.Linear(100, 4)
-        self.relu = nn.ReLU()
-    
-    def forward(self, **kwargs):
-        
-        output = self.model(kwargs['feature'])[1]
-        output = self.relu(self.fc1(self.dropout(output)))
-        output = self.fc2(self.dropout(output))#[B,4]
-
-        loss_fct_tct = CrossEntropyLoss() 
-        loss = loss_fct_tct(output, kwargs['label'])
-
-        return loss#[B]
-        
-    def last_hidden_state(self, inputs):
-        features = self.tokenizer(inputs,return_tensors="pt",padding="max_length", max_length=max_length)['input_ids']
-        features = features.cuda()
-        return self.model(features)['last_hidden_state'][0][0]
 
 class CRL_loss(nn.Module):
     def __init__(self, batch_size, temperature=0.05):
@@ -651,6 +624,10 @@ def main(cfg: DictConfig) -> None:
         model_id = "vasudevgupta/bigbird-roberta-natural-questions"
     elif cfg.model_id == 'bertbase':
         model_id = "bert-base-uncased"
+    elif cfg.model_id == 'robertabase':
+        model_id = "deepset/roberta-base-squad2"
+    elif cfg.model_id == 'albertbase':
+        model_id = "albert-base-v2"
     else:
         raise ValueError('Unknown model id!')
 
@@ -659,23 +636,17 @@ def main(cfg: DictConfig) -> None:
         config = BigBirdConfig.from_pretrained(model_id)
         model = BigBirdForQuestionAnsweringWithNull(config, model_id)
     else:
-        tokenizer = BertTokenizer.from_pretrained(model_id)
-        config = BertConfig.from_pretrained(model_id)
+        if cfg.model_id == 'bertbase':
+            config = BertConfig.from_pretrained(model_id)
+            tokenizer = BertTokenizer.from_pretrained(model_id)
+        elif cfg.model_id == 'robertabase':
+            config = RobertaConfig.from_pretrained(model_id)
+            tokenizer = RobertaTokenizer.from_pretrained(model_id)
+        elif cfg.model_id == 'albertbase':
+            config = AlbertConfig.from_pretrained(model_id)
+            tokenizer = AlbertTokenizer.from_pretrained(model_id)
         model = BertForQuestionAnsweringWithNull(config, model_id)
-
-    if cfg.freeze:
-        # for param in model.parameters():
-        #     param.requires_grad = False
-        #Freeze only main model weight
-        open_num = 0
-        for name, param in model.named_parameters():
-            if "qa_classifier" in name:
-                param.requires_grad = False
-                open_num+=1
-        print(open_num, " of parameters are not freezed")
-
     
-
 
     model = model.to(device)
     print(config)
@@ -746,7 +717,7 @@ def main(cfg: DictConfig) -> None:
                     is_impossible = null_scores[i].argmax().item()
                     qas_id = batch[2][i].item()
 
-                    if True:
+                    if not is_impossible or cfg.TCAS:
                         start_index, end_index, score = get_best_valid_start_end_idx(start_scores[i], end_scores[i], top_k=8, max_size=16)
                         input_ids = inputs["input_ids"][i].tolist()
                         answer_ids = input_ids[start_index: end_index + 1]
@@ -773,58 +744,41 @@ def main(cfg: DictConfig) -> None:
             with open('output.json', 'w') as f:
                 json.dump(outputs_with_idx, f, indent=2)
         else:
-            with open('output.json', 'w') as f:
+            with open(f'output.{data}.json', 'w') as f:
                 json.dump(outputs_with_idx, f, indent=2)
-            with open('score.json', 'w') as f:
-                json.dump(scores,f)
 
         return scores
 
+    def run_eval(n_runs, data):
+        exact = []
+        f1 = []
+        scores_list = []
+        #average of 3 run
+        for i in range(n_runs):
+            scores = evaluation(model, tokenizer, cfg, "", -1,data)
+            scores_list.append(scores)
+            exact.append(scores['exact'])
+            f1.append(scores['f1'])
+        exact = np.array(exact)
+        f1 = np.array(f1)
+        mean_em = round(np.mean(exact),2)
+        mean_f1 = round(np.mean(f1),2)
+        std_em = round(np.std(exact),2)
+        std_f1 = round(np.std(f1),2)
+        average_scores = {'exact':(mean_em, std_em) , 'f1':(mean_f1,std_f1), 'data':data}
+        print(f'evaluation results of {data} set: ',average_scores)
+        with open(f'score.{data}.json', 'w') as f:
+            json.dump(average_scores,f)
+            for scores in scores_list:
+                json.dump(scores,f)
 
     ################
 
     if cfg.mode == 'eval':
         
-        n_runs = 1
-
-
-        exact = 0.
-        f1 = 0.
-        scores_list = []
-        #average of 3 run
-        for i in range(n_runs):
-            scores = evaluation(model, tokenizer, cfg, "", -1,'dev')
-            scores_list.append(scores)
-            exact += scores['exact']
-            f1 += scores['f1']
-        exact /= n_runs
-        f1 /=n_runs
-        average_scores = {'exact':exact, 'f1':f1, 'data':'dev'}
-        print('evaluation results of dev set: ',average_scores)
-        with open('score.dev.json', 'w') as f:
-            json.dump(average_scores,f)
-            for scores in scores_list:
-                json.dump(scores,f)
-            
-        
-        exact = 0.
-        f1 = 0.
-        scores_list = []
-        #average of 3 run
-        for i in range(n_runs):
-            scores = evaluation(model,tokenizer, cfg,"", -1,'test')
-            scores_list.append(scores)
-            exact += scores['exact']
-            f1 += scores['f1']
-        exact /= n_runs
-        f1 /=n_runs
-        average_scores = {'exact':exact, 'f1':f1, 'data':'test'}
-        print('evaluation results of test set: ',average_scores)
-        with open('score.test.json', 'w') as f:
-            json.dump(average_scores,f)
-            for scores in scores_list:
-                json.dump(scores,f)
-
+        n_runs = 3
+        run_eval(n_runs, 'dev')
+        run_eval(n_runs, 'test')
 
     
     if cfg.mode == 'train':
@@ -849,7 +803,7 @@ def main(cfg: DictConfig) -> None:
 
 
         
-        if cfg.multi_task and cfg.CRL:
+        if cfg.TCSE and cfg.CRL:
             processor = TSQAProcessor(os.path.join(root_folder, cfg.dataset.train_synth_file))
             examples_ = processor._create_examples(is_training=True)
             logger.info('Finished processing the synthetic examples')
@@ -859,7 +813,7 @@ def main(cfg: DictConfig) -> None:
                 cfg.doc_stride, cfg.max_query_length, True
             )
             logger.info('Finished converting the synthetic examples')
-            batch_size_synth = cfg.per_gpu_train_batch_size_synth * max(1, cfg.n_gpu)
+            batch_size_synth = cfg.per_gpu_train_batch_size_tcse * max(1, cfg.n_gpu)
             #Get subset of dataset
             dataset_ = torch.utils.data.Subset(dataset_, [i for i in range(len(dataloader)*batch_size_synth)])
             sampler_synth = RandomSampler(dataset_)
@@ -877,7 +831,7 @@ def main(cfg: DictConfig) -> None:
             len_small = min(len(dataloader), len(dataloader_synth), len(dataloader_crl))
             dataloader = zip(dataloader, dataloader_synth, dataloader_crl)
 
-        elif cfg.multi_task:
+        elif cfg.TCSE:
             processor = TSQAProcessor(os.path.join(root_folder, cfg.dataset.train_synth_file))
             examples_ = processor._create_examples(is_training=True)
             logger.info('Finished processing the synthetic examples')
@@ -887,7 +841,7 @@ def main(cfg: DictConfig) -> None:
                 cfg.doc_stride, cfg.max_query_length, True
             )
             logger.info('Finished converting the synthetic examples')
-            batch_size_synth = cfg.per_gpu_train_batch_size_synth * max(1, cfg.n_gpu)
+            batch_size_synth = cfg.per_gpu_train_batch_size_tcse * max(1, cfg.n_gpu)
             #Get subset of dataset
             dataset_ = torch.utils.data.Subset(dataset_, [i for i in range(len(dataloader)*batch_size_synth)])
             sampler_synth = RandomSampler(dataset_)
@@ -912,11 +866,6 @@ def main(cfg: DictConfig) -> None:
             len_small = min(len(dataloader), len(dataloader_crl))
             dataloader = zip(dataloader, dataloader_crl)
 
-
-
-
-        
-
         
 
         no_decay = ["bias", "LayerNorm.weight"]
@@ -929,9 +878,10 @@ def main(cfg: DictConfig) -> None:
         ]
         optimizer = AdamW(optimizer_grouped_parameters, lr=cfg.learning_rate, eps=cfg.adam_epsilon)
 
-        crl_loss = CRL_loss(batch_size_crl)
+        if cfg.CRL:
+            crl_loss = CRL_loss(batch_size_crl)
 
-        if cfg.multi_task or cfg.tct or cfg.CRL:
+        if cfg.TCSE  or cfg.CRL:
             t_total = len_small * cfg.num_train_epochs
         else:
             t_total = len(dataloader) * cfg.num_train_epochs
@@ -951,7 +901,7 @@ def main(cfg: DictConfig) -> None:
         for epoch in iterator:
             #Redefine dataloader
             
-            if cfg.multi_task and cfg.CRL and epoch>0:
+            if cfg.TCSE and cfg.CRL and epoch>0:
                 sampler = RandomSampler(dataset)
                 dataloader = DataLoader(dataset, sampler=sampler, batch_size=batch_size)
                 sampler_synth = RandomSampler(dataset_)
@@ -959,7 +909,7 @@ def main(cfg: DictConfig) -> None:
                 dataloader_crl = DataLoader(training_data, batch_size=batch_size_crl, shuffle=False, drop_last=True)
                 dataloader = zip(dataloader, dataloader_synth, dataloader_crl)
 
-            elif cfg.multi_task and epoch > 0:
+            elif cfg.TCSE and epoch > 0:
                 sampler = RandomSampler(dataset)
                 dataloader = DataLoader(dataset, sampler=sampler, batch_size=batch_size)
                 sampler_synth = RandomSampler(dataset_)
@@ -980,7 +930,7 @@ def main(cfg: DictConfig) -> None:
                 model.train()
 
 
-                if cfg.multi_task and cfg.CRL:
+                if cfg.TCSE and cfg.CRL:
                     batch_timeqa, batch_synth, batch_crl = batch
                     batch_timeqa = tuple(t.to(device) for t in batch_timeqa)
                     batch_synth = tuple(t.to(device) for t in batch_synth)
@@ -1030,7 +980,7 @@ def main(cfg: DictConfig) -> None:
                     #2:1 weight
                     loss = loss_timeqa+cfg.k*loss_synth+cfg.k_crl*loss_crl
                 
-                elif cfg.multi_task:
+                elif cfg.TCSE:
                     batch_timeqa, batch_synth = batch
                     batch_timeqa = tuple(t.to(device) for t in batch_timeqa)
                     batch_synth = tuple(t.to(device) for t in batch_synth)
@@ -1058,7 +1008,6 @@ def main(cfg: DictConfig) -> None:
                     loss_timeqa = outputs_timeqa[0]
                     loss_synth = outputs_synth[0]
 
-                    loss_crl, n, p = crl_loss(output_c, output_q, labels)
                     #Replace nan to 0
                     loss_timeqa = torch.nan_to_num(loss_timeqa)
                     loss_synth = torch.nan_to_num(loss_synth)
@@ -1104,7 +1053,7 @@ def main(cfg: DictConfig) -> None:
                     #2:1 weight
                     loss = loss_timeqa+cfg.k_crl*loss_crl
 
-                # elif cfg.multi_task and cfg.crl:
+                # elif cfg.TCSE and cfg.crl:
 
                 else:
                     batch = tuple(t.to(device) for t in batch)
