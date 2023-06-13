@@ -3,18 +3,18 @@
 
 
 ## Abstract
-Time is one of the crucial factors in real-world question answering (QA) problems. However, language models have difficulty understanding the relationships between time specifiers, such as 'after' and 'before', and numbers, since existing QA datasets do not include sufficient time expressions. To address this issue, we propose a Time-Context aware Question Answering (TCQA) framework. We suggest a Time-Context dependent Span Extraction (TCSE) task, and build a time-context dependent data generation framework for model training. Moreover, we present a metric to evaluate the time awareness of the QA model using TCSE. The TCSE task consists of a question and four sentence candidates classified as correct or incorrect based on time and context. The model is trained to extract the answer span from the sentence that is both correct in time and context. The model trained with TCQA outperforms baseline models up to 8.5 of the F1-score in the TimeQA dataset. 
+Time is one of the crucial factors in real-world question answering (QA) problems. However, language models have difficulty understanding the relationships between time specifiers, such as 'after' and 'before', and numbers, since existing QA datasets do not include sufficient time expressions. To address this issue, we propose a **T**ime-**C**ontext aware **Q**uestion **A**nswering (**TCQA**) framework. We suggest a **T**ime-**C**ontext dependent **S**pan **E**xtraction (**TCSE**) task, and build a time-context dependent data generation framework for model training. Moreover, we present a metric to evaluate the time awareness of the QA model using TCSE. The TCSE task consists of a question and four sentence candidates classified as correct or incorrect based on time and context. The model is trained to extract the answer span from the sentence that is both correct in time and context. The model trained with TCQA outperforms baseline models up to 8.5 of the F1-score in the TimeQA dataset. 
 
 ## TCSE task
 <p align="center">
 <img src="./images/TCSE.PNG" width="70%" height="42.35%" title="TCSE"/>
 </p>
 
-##Repo Structure
-- dataset/: this folder contains question-context template for generating TCSE data
-- Model/: all the running code for model training and evalutation
-- generate_TCSE.py: code for generating TCSE dataset with question-context template
-- TC_score.py: code for calculate TC-score from output file
+## Repo Structure
+- `dataset/`: this folder contains question-context template for generating TCSE data
+- `Model/`: all the running code for model training and evalutation
+- `generate_TCSE.py`: code for generating TCSE dataset with question-context template
+- `TC_score.py`: code for calculate TC-score from output file
 
 ## Requirements
 - Python 3.8.2
