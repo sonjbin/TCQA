@@ -142,7 +142,7 @@ token_time_q = '[TMPQ]'
 
 def main(args):
     print("Start...")
-    root_folder = '/mnt/nas2/jungbin/research/TemporalQA/Time-Sensitive-QA/dataset/'
+    root_folder = './dataset/'
     #Dataset type
     folder_name = f'synth_{args.data}'
     #Load and use test set
@@ -234,12 +234,9 @@ def main(args):
         print("Load pretrained question generator...")
         q_template_list = []
         idx = 0
-        #Divide provesses
-        p_range = int(len(template_list)/4)
-        s = args.pnum*p_range
-        e = (args.pnum+1)*p_range
-        if True: #args.pnum == 3:
-            e = len(template_list)
+
+        s = 0
+        e = len(template_list)
         print(f"Start: {s}, End: {e}")
         for template in tqdm(template_list[s:e]):
             generated_qs = qg.generate(template['sent_name'], answer_style = "all",num_questions=5)
@@ -264,13 +261,13 @@ def main(args):
                             question = question.replace(time_exp, '')
                         #Add special token for question time
                         question = question.replace("?",f"{token_time_q} ?")
-                        data_idx = f"/P#{args.pnum}/C#{idx}"
+                        data_idx = f"/C#{idx}"
                         data = {'idx':data_idx, 'question':question, 'sent_template':template['sent_template']}
                         q_template_list.append(data)
                         idx+=1
 
         print("# of Generated case: ",len(q_template_list))
-        tcname = root_folder+f'{folder_name}/synthQA_sent_template_withq_{args.pnum}.json'
+        tcname = root_folder+f'{folder_name}/synthQA_sent_template_withq.json'
         write_file(tcname, q_template_list)
 
 
@@ -352,7 +349,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--loadtc',type=str2bool, default=True)
     parser.add_argument('--loadq',type=str2bool, default=False)
-    parser.add_argument('--pnum',type=int)
     parser.add_argument('--add_range',type=str2bool, default=False)
     parser.add_argument('--data', default='train')
     parser.add_argument('--crl', type=str2bool,default=False)

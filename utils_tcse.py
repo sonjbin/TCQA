@@ -13,8 +13,7 @@ import numpy as np
 
 
 
-# dp_predictor = Predictor.from_path("https://storage.googleapis.com/allennlp-public-models/biaffine-dependency-parser-ptb-2020.04.06.tar.gz")
-# srl_predictor = Predictor.from_path("https://storage.googleapis.com/allennlp-public-models/structured-prediction-srl-bert.2020.12.15.tar.gz")
+dp_predictor = Predictor.from_path("https://storage.googleapis.com/allennlp-public-models/biaffine-dependency-parser-ptb-2020.04.06.tar.gz")
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -26,35 +25,8 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
-def check_temp_sentence(sent):
-    """
-    Check whether the input sentence include temporal(year) information
-    param:
-        sent: [str] input sentence
-    """
-    p = re.compile(" in [\d]+|^in [\d]+")
-    if len(p.findall(sent.lower()))>0:
-        return True
-    return False
 
-def valid_sentence(sent):
-    """
-    Check whether the sentence include only one temporal expression and length smaller than 6
-    param:
-        sent: [str]sentence
-    return:
-        valid: [Boolean]
-    """
-    tmp_num_cnt = 0
-    tmp_len_cnt = 0
-    parsed = srl_predictor.predict(sent)
-    for entity in parsed['verbs']:
-            tags = entity['tags']
-            tmp_num_cnt  += tags.count('B-ARGM-TMP')
-            tmp_len_cnt  += tags.count('I-ARGM-TMP')
-    if tmp_num_cnt != 1 or tmp_len_cnt >=6:
-        return False
-    return True
+
 
 def create_test_case(sent):
     """
@@ -176,36 +148,7 @@ def create_test_template(sent):
     
     return result
 
-def remove_time(text):
-    """
-    For given text, remove all temporal expression.
-    :params
-    input:
-        text: input text
-    output:
-        sent: edited text
-    """
-    #If there are no any number in sentence, pass
-    
-    if not any(char.isdigit() for char in text):
-        return text
-    
-    sp_tokenizer = spacy.load('en_core_web_sm')
 
-
-    words = np.array([token.text_with_ws.strip() for token in sp_tokenizer(text)])
-    parsed = srl_predictor.predict(sentence=text)
-    time_index = []
-    for entity in parsed['verbs']:
-        tags = np.array(entity['tags'])
-        #remove all words that are 'B-ARGM-TMP' or'I-ARGM-TMP'
-        time_index = list(set(time_index+list(np.where(tags=='B-ARGM-TMP')[0])+list(np.where(tags=='I-ARGM-TMP')[0])))
-    np.put(words, time_index, '')
-    words = np.array([word for word in words if not word == ''])
-    sent = ' '.join(words)
-
-    
-    return sent
 
 
    
