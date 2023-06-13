@@ -1,14 +1,17 @@
 defaults:
   - dataset: easy
 
+# hydra:
+#   run:
+#     dir:  /mnt/nas2/jungbin/research/TemporalQA/Time-Sensitive-QA/outputs/results
+
 
 
 model_id: nq
 mode: eval
 cuda:
 per_gpu_train_batch_size: 4
-per_gpu_train_batch_size_synth: 8
-per_gpu_train_batch_size_tct: 8
+per_gpu_train_batch_size_tcse: 8
 per_gpu_train_batch_size_crl: 8
 learning_rate: 2e-5
 adam_epsilon: 1e-8
@@ -23,9 +26,8 @@ model_path: #/mnt/nas2/jungbin/research/TemporalQA/Time-Sensitive-QA/outputs/202
 n_gpu:
 freeze: False
 CRL: False 
-multi_task: False
+TCSE: False
 k:
-tct:
-k_tct:
 k_crl:
 use_bert: False
+TCAS: 
