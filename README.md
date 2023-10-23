@@ -12,7 +12,7 @@ Time is one of the crucial factors in real-world question answering (QA) problem
 
 ## Repo Structure
 - `dataset/`: this folder contains question-context template for generating TCSE data
-- `Model/`: all the running code for model training and evalutation
+- `Model/`: all the running code for model training and evaluation
 - `generate_TCSE.py`: code for generating TCSE dataset with question-context template
 - `TC_score.py`: code for calculate TC-score from output file
 
